@@ -4,191 +4,108 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Student Attendance Tracker</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f5f5f5;
-      margin: 0;
-      padding: 20px;
-    }
-
-    .container {
-      max-width: 700px;
-      margin: auto;
-      background: white;
-      padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-
-    h1 {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-
-    .input-group {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-
-    input[type="text"], input[type="date"] {
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      font-size: 16px;
-    }
-
-    .student-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 12px;
-      border: 1px solid #ddd;
-      border-radius: 5px;
-      background: #f9f9f9;
-      margin-bottom: 10px;
-    }
-
-    .toggle-btn {
-      padding: 6px 12px;
-      font-size: 14px;
-      border: none;
-      border-radius: 4px;
-      color: white;
-      cursor: pointer;
-    }
-
-    .present {
-      background-color: #28a745;
-    }
-
-    .absent {
-      background-color: #dc3545;
-    }
-
-    button.submit-btn {
-      width: 100%;
-      padding: 12px;
-      background-color: #007bff;
-      color: white;
-      font-size: 16px;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      margin-top: 20px;
-    }
-
-    @media (max-width: 500px) {
-      .student-row {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 8px;
-      }
-    }
-  </style>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <div class="container">
-    <h1>Student Attendance</h1>
+    <header class="header">
+      <h1>Student Attendance Tracker</h1>
+      <p>Track and manage student attendance efficiently</p>
+    </header>
 
-    <div class="input-group">
-      <input id="subject" type="text" placeholder="Enter Subject" required />
-      <input id="date" type="date" required />
+    <!-- Main Application -->
+    <div class="main-app" id="mainApp">
+      <!-- Attendance Form -->
+      <div class="card">
+        <h2>Mark Attendance</h2>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="attendanceDate">Date:</label>
+            <input type="date" id="attendanceDate" required />
+          </div>
+          <div class="form-group">
+            <label for="subject">Subject:</label>
+            <select id="subject" required>
+              <option value="">Select Subject</option>
+              <option value="Physics">Software Engineering</option>
+              <option value="Mathematics">Descreate Mathematics & Automata Theory</option>
+              <option value="History">Databse Management System</option>
+              <option value="Chemistry">Cyber Security</option>
+              <option value="Biology">MDM-III</option>
+              <option value="English">OE-III</option>
+              <option value="Computer Science">Computer Science</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="students-list" id="studentsList"></div>
+
+        <button onclick="submitAttendance()" class="btn btn-success" id="submitBtn" disabled>
+          Submit Attendance
+        </button>
+      </div>
+
+      <!-- View Absentees -->
+      <div class="card">
+        <h2>View Absentees</h2>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="viewDate">Date:</label>
+            <input type="date" id="viewDate" />
+          </div>
+          <div class="form-group">
+            <label for="viewSubject">Subject:</label>
+            <select id="viewSubject">
+              <option value="">Select Subject</option>
+              <option value="Mathematics">Mathematics</option>
+              <option value="Physics">Physics</option>
+              <option value="Chemistry">Chemistry</option>
+              <option value="Biology">Biology</option>
+              <option value="English">English</option>
+              <option value="History">History</option>
+              <option value="Computer Science">Computer Science</option>
+            </select>
+          </div>
+          <button onclick="viewAbsentees()" class="btn btn-secondary">View Absentees</button>
+        </div>
+
+        <div class="absentees-list" id="absenteesList"></div>
+      </div>
+
+      <!-- Statistics -->
+      <div class="card">
+        <h2>Attendance Statistics</h2>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <span class="stat-number" id="totalStudents">0</span>
+            <span class="stat-label">Total Students</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-number" id="presentToday">0</span>
+            <span class="stat-label">Present Today</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-number" id="absentToday">0</span>
+            <span class="stat-label">Absent Today</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-number" id="attendanceRate">0%</span>
+            <span class="stat-label">Attendance Rate</span>
+          </div>
+        </div>
+
+        <div class="chart-container">
+          <canvas id="attendanceChart" width="400" height="200"></canvas>
+        </div>
+      </div>
     </div>
 
-    <div id="studentList"></div>
-
-    <button class="submit-btn" onclick="submitAttendance()">Submit Attendance</button>
+    <!-- Loading and Error Messages -->
+    <div class="message" id="messageDiv" style="display: none;"></div>
   </div>
 
-  <script>
-    const API_URL = 'https://script.google.com/macros/s/AKfycbyoN53x8kASdXbxyevpfvs5HN77utbq7BvAjXJ9VS7ozno8e6LpW1QcHed6jb9MnWFg3Q/exec'; // Replace with your Google Apps Script URL
-    let students = [];
-
-    async function fetchStudents() {
-      try {
-        const res = await fetch(`${API_URL}?action=getStudents`);
-        const data = await res.json();
-        students = data;
-        renderStudents();
-      } catch (error) {
-        alert("Error fetching student list.");
-        console.error(error);
-      }
-    }
-
-    function renderStudents() {
-      const container = document.getElementById("studentList");
-      container.innerHTML = "";
-      students.forEach((student, index) => {
-        const row = document.createElement("div");
-        row.className = "student-row";
-
-        const info = document.createElement("div");
-        info.innerHTML = `<strong>${student.roll}</strong> - ${student.name}`;
-
-        const toggle = document.createElement("button");
-        toggle.textContent = "Present";
-        toggle.className = "toggle-btn present";
-        toggle.dataset.index = index;
-        toggle.dataset.status = "Present";
-        toggle.onclick = () => toggleStatus(toggle);
-
-        row.appendChild(info);
-        row.appendChild(toggle);
-        container.appendChild(row);
-      });
-    }
-
-    function toggleStatus(btn) {
-      if (btn.dataset.status === "Present") {
-        btn.textContent = "Absent";
-        btn.className = "toggle-btn absent";
-        btn.dataset.status = "Absent";
-      } else {
-        btn.textContent = "Present";
-        btn.className = "toggle-btn present";
-        btn.dataset.status = "Present";
-      }
-    }
-
-    async function submitAttendance() {
-      const subject = document.getElementById("subject").value.trim();
-      const date = document.getElementById("date").value;
-      if (!subject || !date) return alert("Please enter subject and date");
-
-      const key = `${date}_${subject}`;
-      const attendance = students.map((s, i) => {
-        const btn = document.querySelector(`.toggle-btn[data-index="${i}"]`);
-        return {
-          roll: s.roll,
-          name: s.name,
-          status: btn.dataset.status
-        };
-      });
-
-      try {
-        const res = await fetch(API_URL, {
-          method: "POST",
-          body: JSON.stringify({
-            action: "submitAttendance",
-            key: key,
-            data: attendance,
-            subject: subject
-          }),
-          headers: { "Content-Type": "application/json" }
-        });
-        const result = await res.text();
-        alert(result || "Attendance submitted!");
-      } catch (err) {
-        alert("Error submitting attendance");
-        console.error(err);
-      }
-    }
-
-    window.onload = fetchStudents;
-  </script>
+  <script src="script.js"></script>
 </body>
 </html>
