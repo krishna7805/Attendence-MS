@@ -1,81 +1,120 @@
 // Hardcoded Supabase credentials
-const SUPABASE_URL = 'https://zllreietivjwymrtsbex.supabase.co';  // replace with your actual Supabase URL
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsbHJlaWV0aXZqd3ltcnRzYmV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwNjg0OTQsImV4cCI6MjA2OTY0NDQ5NH0.ZwlaHXauaxc_37VRoRc4Oz3AkA9mkS88e6WCs_NaaxM';  // replace with your actual Supabase anon/public key
+const SUPABASE_URL = 'https://zllreietivjwymrtsbex.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsbHJlaWV0aXZqd3ltcnRzYmV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwNjg0OTQsImV4cCI6MjA2OTY0NDQ5NH0.ZwlaHXauaxc_37VRoRc4Oz3AkA9mkS88e6WCs_NaaxM';
 
 // Initialize Supabase client
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Global variables
 let students = [];
+let subjects = [];
 let attendanceChart = null;
 
-document.addEventListener('DOMContentLoaded', async function () {
-  const today = new Date().toISOString().split('T')[0];
-  document.getElementById('attendanceDate').value = today;
-  document.getElementById('viewDate').value = today;
-
-  try {
-    await loadStudents();
-    await updateStatistics();
-  } catch (error) {
-    showMessage(`Failed to initialize: ${error.message}`, 'error');
-  }
+// Initialize the application
+document.addEventListener('DOMContentLoaded', async function() {
+    // Set today's date as default
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('attendanceDate').value = today;
+    document.getElementById('viewDate').value = today;
+    
+    try {
+        await loadSubjects();
+        await loadStudents();
+        await updateStatistics();
+    } catch (error) {
+        showMessage(`Failed to initialize: ${error.message}`, 'error');
+    }
 });
 
-
-// Load saved credentials from localStorage
-function loadSavedCredentials() {
-    const savedUrl = localStorage.getItem('supabaseUrl');
-    const savedKey = localStorage.getItem('supabaseKey');
-    
-    if (savedUrl && savedKey) {
-        document.getElementById('supabaseUrl').value = savedUrl;
-        document.getElementById('supabaseKey').value = savedKey;
-        connectSupabase();
+// Load subjects from database
+async function loadSubjects() {
+    try {
+        const { data, error } = await supabase
+            .from('subjects')
+            .select('*')
+            .order('name');
+        
+        if (error) throw error;
+        
+        subjects = data || [];
+        populateSubjectDropdowns();
+        
+    } catch (error) {
+        console.error('Error loading subjects:', error);
+        // Continue without subjects - user can add custom ones
     }
 }
 
-// Connect to Supabase
-async function connectSupabase() {
-    const url = document.getElementById('supabaseUrl').value.trim();
-    const key = document.getElementById('supabaseKey').value.trim();
+// Populate subject dropdowns with existing subjects
+function populateSubjectDropdowns() {
+    const subjectSelect = document.getElementById('subject');
+    const viewSubjectSelect = document.getElementById('viewSubject');
     
-    if (!url || !key) {
-        showMessage('Please enter both Supabase URL and API key', 'error');
-        return;
-    }
+    // Clear existing options except the first two
+    subjectSelect.innerHTML = '<option value="">Select Subject</option>';
+    viewSubjectSelect.innerHTML = '<option value="">Select Subject</option>';
     
+    // Add subjects from database
+    subjects.forEach(subject => {
+        const option1 = document.createElement('option');
+        option1.value = subject.subject_id;
+        option1.textContent = subject.name;
+        subjectSelect.appendChild(option1);
+        
+        const option2 = document.createElement('option');
+        option2.value = subject.subject_id;
+        option2.textContent = subject.name;
+        viewSubjectSelect.appendChild(option2);
+    });
+    
+    // Add "Other (Custom)" option
+    const otherOption1 = document.createElement('option');
+    otherOption1.value = 'other';
+    otherOption1.textContent = 'Other (Custom)';
+    subjectSelect.appendChild(otherOption1);
+    
+    const otherOption2 = document.createElement('option');
+    otherOption2.value = 'other';
+    otherOption2.textContent = 'Other (Custom)';
+    viewSubjectSelect.appendChild(otherOption2);
+}
+
+// Ensure subject exists in database
+async function ensureSubjectExists(subjectName) {
     try {
-        // Initialize Supabase client
-        supabase = window.supabase.createClient(url, key);
+        // Generate subject_id from subject name (remove spaces, convert to uppercase)
+        const subjectId = subjectName.replace(/\s+/g, '_').toUpperCase();
         
-        // Test connection by trying to fetch students
-        const { data, error } = await supabase
-            .from('students')
-            .select('*')
-            .limit(1);
+        // Check if subject already exists
+        const { data: existingSubject, error: checkError } = await supabase
+            .from('subjects')
+            .select('subject_id')
+            .eq('subject_id', subjectId)
+            .single();
         
-        if (error) {
-            throw error;
+        if (checkError && checkError.code !== 'PGRST116') {
+            throw checkError;
         }
         
-        // Save credentials
-        localStorage.setItem('supabaseUrl', url);
-        localStorage.setItem('supabaseKey', key);
+        // If subject doesn't exist, create it
+        if (!existingSubject) {
+            const { error: insertError } = await supabase
+                .from('subjects')
+                .insert([{
+                    subject_id: subjectId,
+                    name: subjectName
+                }]);
+            
+            if (insertError) throw insertError;
+            
+            // Reload subjects to update the dropdowns
+            await loadSubjects();
+        }
         
-        // Hide config section and show main app
-        document.getElementById('configSection').style.display = 'none';
-        document.getElementById('mainApp').style.display = 'block';
-        
-        showMessage('Successfully connected to Supabase!', 'success');
-        
-        // Load students and initialize
-        await loadStudents();
-        await updateStatistics();
+        return subjectId;
         
     } catch (error) {
-        showMessage(`Connection failed: ${error.message}`, 'error');
-        console.error('Connection error:', error);
+        throw new Error(`Failed to ensure subject exists: ${error.message}`);
     }
 }
 
@@ -109,7 +148,7 @@ function displayStudents() {
         container.innerHTML = `
             <div class="message info">
                 <strong>No students found.</strong> Please add students to the database first.
-                <br><small>Table: students (fields: id, name, roll_number)</small>
+                <br><small>Table: students (fields: roll_number, name, email)</small>
             </div>
         `;
         return;
@@ -123,7 +162,7 @@ function displayStudents() {
             </div>
             <div style="display: flex; align-items: center;">
                 <label class="toggle-switch">
-                    <input type="checkbox" checked data-student-id="${student.id}">
+                    <input type="checkbox" checked data-roll-number="${student.roll_number}">
                     <span class="slider"></span>
                     <span class="toggle-label">Present</span>
                 </label>
@@ -145,7 +184,7 @@ function displayStudents() {
 function updateSubmitButton() {
     const submitBtn = document.getElementById('submitBtn');
     const date = document.getElementById('attendanceDate').value;
-    const subject = document.getElementById('subject').value;
+    const subject = getCurrentSubject();
     
     submitBtn.disabled = !date || !subject || students.length === 0;
 }
@@ -157,9 +196,9 @@ document.getElementById('subject').addEventListener('change', updateSubmitButton
 // Submit attendance
 async function submitAttendance() {
     const date = document.getElementById('attendanceDate').value;
-    const subject = document.getElementById('subject').value;
+    const subjectName = getCurrentSubject();
     
-    if (!date || !subject) {
+    if (!date || !subjectName) {
         showMessage('Please select both date and subject', 'error');
         return;
     }
@@ -170,17 +209,20 @@ async function submitAttendance() {
     submitBtn.disabled = true;
     
     try {
+        // Ensure subject exists in database and get subject_id
+        const subjectId = await ensureSubjectExists(subjectName);
+        
         const attendanceRecords = [];
         
         // Collect attendance data
         document.querySelectorAll('#studentsList input[type="checkbox"]').forEach(checkbox => {
-            const studentId = checkbox.dataset.studentId;
-            const status = checkbox.checked ? 'present' : 'absent';
+            const rollNumber = checkbox.dataset.rollNumber;
+            const status = checkbox.checked ? 'Present' : 'Absent';
             
             attendanceRecords.push({
-                student_id: parseInt(studentId),
+                roll_number: rollNumber,
                 date: date,
-                subject: subject,
+                subject_id: subjectId,
                 status: status
             });
         });
@@ -188,34 +230,31 @@ async function submitAttendance() {
         // Check if attendance already exists for this date and subject
         const { data: existingRecords, error: checkError } = await supabase
             .from('attendance')
-            .select('student_id')
+            .select('roll_number')
             .eq('date', date)
-            .eq('subject', subject);
+            .eq('subject_id', subjectId);
         
         if (checkError) throw checkError;
         
         if (existingRecords && existingRecords.length > 0) {
-            // Update existing records
-            for (const record of attendanceRecords) {
-                const { error } = await supabase
-                    .from('attendance')
-                    .update({ status: record.status })
-                    .eq('student_id', record.student_id)
-                    .eq('date', date)
-                    .eq('subject', subject);
-                
-                if (error) throw error;
-            }
-            showMessage('Attendance updated successfully!', 'success');
-        } else {
-            // Insert new records
-            const { error } = await supabase
+            // Delete existing records first
+            const { error: deleteError } = await supabase
                 .from('attendance')
-                .insert(attendanceRecords);
+                .delete()
+                .eq('date', date)
+                .eq('subject_id', subjectId);
             
-            if (error) throw error;
-            showMessage('Attendance submitted successfully!', 'success');
+            if (deleteError) throw deleteError;
         }
+        
+        // Insert new records
+        const { error } = await supabase
+            .from('attendance')
+            .insert(attendanceRecords);
+        
+        if (error) throw error;
+        
+        showMessage('Attendance submitted successfully!', 'success');
         
         await updateStatistics();
         
@@ -232,47 +271,65 @@ async function submitAttendance() {
 // View absentees
 async function viewAbsentees() {
     const date = document.getElementById('viewDate').value;
-    const subject = document.getElementById('viewSubject').value;
+    const subjectName = getCurrentViewSubject();
     
-    if (!date || !subject) {
+    if (!date || !subjectName) {
         showMessage('Please select both date and subject to view absentees', 'error');
         return;
     }
     
     try {
-        const { data, error } = await supabase
-            .from('attendance')
-            .select(`
-                student_id,
-                students (name, roll_number)
-            `)
-            .eq('date', date)
-            .eq('subject', subject)
-            .eq('status', 'absent');
+        // Find subject_id for the given subject name
+        let subjectId;
+        const existingSubject = subjects.find(s => s.name === subjectName || s.subject_id === subjectName);
+        if (existingSubject) {
+            subjectId = existingSubject.subject_id;
+        } else {
+            // Generate subject_id from name
+            subjectId = subjectName.replace(/\s+/g, '_').toUpperCase();
+        }
         
-        if (error) throw error;
+        // First get all absentees from attendance table
+        const { data: absenteeData, error: attendanceError } = await supabase
+            .from('attendance')
+            .select('roll_number')
+            .eq('date', date)
+            .eq('subject_id', subjectId)
+            .eq('status', 'Absent');
+        
+        if (attendanceError) throw attendanceError;
         
         const absenteesContainer = document.getElementById('absenteesList');
         
-        if (!data || data.length === 0) {
+        if (!absenteeData || absenteeData.length === 0) {
             absenteesContainer.innerHTML = `
                 <div class="message info">
-                    <strong>Great news!</strong> No absentees found for ${subject} on ${date}.
+                    <strong>Great news!</strong> No absentees found for ${subjectName} on ${date}.
                 </div>
             `;
-        } else {
-            absenteesContainer.innerHTML = `
-                <h3 style="margin-bottom: 16px; color: #744210;">
-                    Absentees for ${subject} on ${date} (${data.length} students)
-                </h3>
-                ${data.map(record => `
-                    <div class="absentee-item">
-                        <div class="student-name">${record.students.name}</div>
-                        <div class="student-roll">Roll: ${record.students.roll_number}</div>
-                    </div>
-                `).join('')}
-            `;
+            return;
         }
+        
+        // Get student details for absentees
+        const rollNumbers = absenteeData.map(record => record.roll_number);
+        const { data: studentData, error: studentError } = await supabase
+            .from('students')
+            .select('name, roll_number')
+            .in('roll_number', rollNumbers);
+        
+        if (studentError) throw studentError;
+        
+        absenteesContainer.innerHTML = `
+            <h3 style="margin-bottom: 16px; color: #744210;">
+                Absentees for ${subjectName} on ${date} (${studentData.length} students)
+            </h3>
+            ${studentData.map(student => `
+                <div class="absentee-item">
+                    <div class="student-name">${student.name}</div>
+                    <div class="student-roll">Roll: ${student.roll_number}</div>
+                </div>
+            `).join('')}
+        `;
         
     } catch (error) {
         showMessage(`Error fetching absentees: ${error.message}`, 'error');
@@ -294,8 +351,8 @@ async function updateStatistics() {
         if (error) throw error;
         
         const totalStudents = students.length;
-        const presentToday = todayAttendance ? todayAttendance.filter(a => a.status === 'present').length : 0;
-        const absentToday = todayAttendance ? todayAttendance.filter(a => a.status === 'absent').length : 0;
+        const presentToday = todayAttendance ? todayAttendance.filter(a => a.status === 'Present').length : 0;
+        const absentToday = todayAttendance ? todayAttendance.filter(a => a.status === 'Absent').length : 0;
         const attendanceRate = totalStudents > 0 ? Math.round((presentToday / totalStudents) * 100) : 0;
         
         // Update stats display
@@ -375,6 +432,75 @@ function showMessage(message, type = 'info') {
     setTimeout(() => {
         messageDiv.style.display = 'none';
     }, 5000);
+}
+
+// Toggle custom subject input
+function toggleCustomSubject() {
+    const subjectSelect = document.getElementById('subject');
+    const customSubjectInput = document.getElementById('customSubject');
+    
+    if (subjectSelect.value === 'other') {
+        customSubjectInput.style.display = 'block';
+        customSubjectInput.required = true;
+        customSubjectInput.focus();
+    } else {
+        customSubjectInput.style.display = 'none';
+        customSubjectInput.required = false;
+        customSubjectInput.value = '';
+    }
+    updateSubmitButton();
+}
+
+// Update subject value when custom input changes
+function updateSubjectValue() {
+    updateSubmitButton();
+}
+
+// Get the current subject value (either from dropdown or custom input)
+function getCurrentSubject() {
+    const subjectSelect = document.getElementById('subject');
+    const customSubjectInput = document.getElementById('customSubject');
+    
+    if (subjectSelect.value === 'other' && customSubjectInput.value.trim()) {
+        return customSubjectInput.value.trim();
+    }
+    
+    // Find subject name from subjects array
+    const selectedSubject = subjects.find(s => s.subject_id === subjectSelect.value);
+    return selectedSubject ? selectedSubject.name : subjectSelect.value;
+}
+
+// Toggle custom view subject input
+function toggleCustomViewSubject() {
+    const viewSubjectSelect = document.getElementById('viewSubject');
+    const customViewSubjectInput = document.getElementById('customViewSubject');
+    
+    if (viewSubjectSelect.value === 'other') {
+        customViewSubjectInput.style.display = 'block';
+        customViewSubjectInput.focus();
+    } else {
+        customViewSubjectInput.style.display = 'none';
+        customViewSubjectInput.value = '';
+    }
+}
+
+// Update view subject value when custom input changes
+function updateViewSubjectValue() {
+    // Just trigger any necessary updates
+}
+
+// Get the current view subject value (either from dropdown or custom input)
+function getCurrentViewSubject() {
+    const viewSubjectSelect = document.getElementById('viewSubject');
+    const customViewSubjectInput = document.getElementById('customViewSubject');
+    
+    if (viewSubjectSelect.value === 'other' && customViewSubjectInput.value.trim()) {
+        return customViewSubjectInput.value.trim();
+    }
+    
+    // Find subject name from subjects array
+    const selectedSubject = subjects.find(s => s.subject_id === viewSubjectSelect.value);
+    return selectedSubject ? selectedSubject.name : viewSubjectSelect.value;
 }
 
 // Auto-hide messages when clicking anywhere

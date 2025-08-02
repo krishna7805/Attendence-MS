@@ -27,15 +27,12 @@
           </div>
           <div class="form-group">
             <label for="subject">Subject:</label>
-            <select id="subject" required>
+            <select id="subject" required onchange="toggleCustomSubject()">
               <option value="">Select Subject</option>
-              <option value="SE">Software Engineering</option>
-              <option value="DMAT">Descreate Mathematics & Automata Theory</option>
-              <option value="DBMS">Databse Management System</option>
-              <option value="CSec">Cyber Security</option>
-              <option value="MDM-III">MDM-III</option>
-              <option value="OE-III">OE-III</option>
+              <option value="other">Other (Custom)</option>
             </select>
+            <input type="text" id="customSubject" placeholder="Enter custom subject" 
+                   style="display: none; margin-top: 8px;" oninput="updateSubjectValue()">
           </div>
         </div>
 
@@ -56,15 +53,12 @@
           </div>
           <div class="form-group">
             <label for="viewSubject">Subject:</label>
-            <select id="viewSubject">
+            <select id="viewSubject" onchange="toggleCustomViewSubject()">
               <option value="">Select Subject</option>
-              <option value="SE">Software Engineering</option>
-              <option value="DMAT">Descreate Mathematics & Automata Theory</option>
-              <option value="DBMS">Databse Management System</option>
-              <option value="CSec">Cyber Security</option>
-              <option value="MDM-III">MDM-III</option>
-              <option value="OE-III">OE-III</option>
+              <option value="other">Other (Custom)</option>
             </select>
+            <input type="text" id="customViewSubject" placeholder="Enter custom subject" 
+                   style="display: none; margin-top: 8px;" oninput="updateViewSubjectValue()">
           </div>
           <button onclick="viewAbsentees()" class="btn btn-secondary">View Absentees</button>
         </div>
