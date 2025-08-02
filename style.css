@@ -354,7 +354,7 @@ input:not(:checked) + .slider + .toggle-label {
     }
     
     .student-item {
-        flex-direction: column;
+        /* flex-direction: column; */
         align-items: flex-start;
         gap: 12px;
     }
